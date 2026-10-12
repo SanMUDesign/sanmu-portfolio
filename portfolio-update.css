@@ -166,3 +166,10 @@ footer>.footer-about-link .link-label { position:relative; left:2px; }
   .works-grid .card-meta .caption-client { font-size:13px; }
   .works-grid .featured-info { --caption-en-size:10px; --caption-category-size:15px; --caption-client-size:13px; }
 }
+
+/* Discourage long-press saving, image selection and image dragging. */
+.artwork-protected { position:relative; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.artwork-protected::after { content:""; position:absolute; inset:0; z-index:1; }
+.artwork-protected img,.hero-images { user-select:none; -webkit-user-drag:none; -webkit-touch-callout:none; }
+.artwork-protected img { pointer-events:none; }
+@media print { .artwork-protected,.hero-images { visibility:hidden!important; } }

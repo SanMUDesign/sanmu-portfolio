@@ -1,5 +1,6 @@
 const main = document.querySelector('#main');
 let slideTimer;
+let disposeSlideshow = () => {};
 let observers = [];
 let scrollCleanup = () => {};
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -43,7 +44,7 @@ const experience = [
 ];
 function home() {
   return `<section class="hero hero-v2">
-    <div class="hero-images" aria-hidden="true">${heroProjects.map((p,i)=>`<div class="hero-slide ${i===0?'visible':''}" data-project="${p.id}" style="background-image:url('${p.heroImage || p.image}')"></div>`).join('')}</div>
+    <div class="hero-images" aria-hidden="true">${heroProjects.map((p,i)=>`<div class="hero-slide ${i===0?'visible':''}" data-project="${p.id}" data-background="${heroImageSource(p)}" ${i===0?`style="background-image:url('${heroImageSource(p)}')"`:""}></div>`).join('')}</div>
     <div class="hero-bios"><p class="bio-en" lang="en">${profile.introEn}</p><p class="bio-cn">${profile.intro}</p></div>
     <div class="hero-identity">
       <div class="name-area"><div class="name-print-group" data-print><h1 class="print-line">SanMu<span class="registered">®</span></h1><div class="cn-name-row"><h2 class="hero-cn print-line">林俊杰</h2><p class="name-discipline">主视觉 / 信息传达 / 字体设计</p></div></div>
@@ -54,7 +55,36 @@ function home() {
     <div class="hero-bottom"><a class="scroll-link mono" href="#selected">SCROLL TO EXPLORE <span>↓</span></a><div class="slide-controls"><span id="slide-number" class="mono">01 / ${String(heroProjects.length).padStart(2,'0')}</span><div class="slide-buttons">${heroProjects.map((p,n)=>`<button aria-label="背景作品 ${n+1}：${p.title}" aria-pressed="${n===0}" class="${n===0?'active':''}" data-slide="${n}"></button>`).join('')}</div><button class="pause-btn" id="pause-slide" aria-label="暂停背景轮播">暂停</button></div></div>
   </section><section id="selected"><div class="section-intro"><div><p class="eyebrow">01 / SELECTED WORK</p><h2>精选作品</h2></div><a class="text-link" href="#/work">全部作品 <span>↗</span></a></div><div class="works-grid featured-grid fixed-columns" id="home-grid">${projectColumns(featuredColumns)}</div><div class="selected-footer"><p class="project-preview-note">更多作品期待您的品鉴......</p><a class="text-link" href="#/work"><span class="link-label">查看完整作品集</span><span class="link-arrow" aria-hidden="true">↗</span></a></div></section><section class="home-outro"><p>好的设计，<br><span>从一次对话开始。</span></p><a class="text-link" href="#/contact"><span class="link-label">保持联系</span><span class="link-arrow" aria-hidden="true">↗</span></a></section>`;
 }
-function startSlideshow(){let current=0;let paused=matchMedia('(prefers-reduced-motion: reduce)').matches;const slides=[...document.querySelectorAll('.hero-slide')];if(!slides.length)return;const buttons=[...document.querySelectorAll('[data-slide]')];const pause=document.querySelector('#pause-slide');function show(n){current=n;slides.forEach((s,i)=>s.classList.toggle('visible',i===n));buttons.forEach((b,i)=>{b.classList.toggle('active',i===n);b.setAttribute('aria-pressed',String(i===n))});document.querySelector('#slide-number').textContent=`${String(n+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`}function setTimer(){clearInterval(slideTimer);if(!paused)slideTimer=setInterval(()=>show((current+1)%slides.length),6500);pause.textContent=paused?'播放':'暂停';pause.setAttribute('aria-label',paused?'播放背景轮播':'暂停背景轮播')}buttons.forEach(b=>b.onclick=()=>{show(Number(b.dataset.slide));setTimer()});pause.onclick=()=>{paused=!paused;setTimer()};setTimer()}
+function startSlideshow() {
+  const slides=[...document.querySelectorAll('.hero-slide')];
+  const buttons=[...document.querySelectorAll('[data-slide]')];
+  const pause=document.querySelector('#pause-slide');
+  let current=0, paused=reducedMotion.matches, disposed=false, request=0;
+  disposeSlideshow=()=>{disposed=true;request++;clearInterval(slideTimer)};
+  async function show(index) {
+    if (disposed || index===current) return;
+    const ticket=++request;
+    const slide=slides[index];
+    if (!slide.dataset.loaded) {
+      const image=new Image();image.decoding='async';image.src=slide.dataset.background;
+      try { await image.decode(); } catch { return; }
+      if (disposed || ticket!==request) return;
+      slide.style.backgroundImage=`url('${slide.dataset.background}')`;
+      slide.dataset.loaded='true';
+    }
+    slides[current].classList.remove('visible');buttons[current].classList.remove('active');buttons[current].setAttribute('aria-pressed','false');
+    current=index;slides[current].classList.add('visible');buttons[current].classList.add('active');buttons[current].setAttribute('aria-pressed','true');
+    document.querySelector('#slide-number').textContent=`${String(current+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`;
+  }
+  function setTimer() {
+    clearInterval(slideTimer);
+    if (!paused) slideTimer=setInterval(()=>{if(!document.hidden)show((current+1)%slides.length)},6500);
+    pause.textContent=paused?'播放':'暂停';pause.setAttribute('aria-label',paused?'播放背景轮播':'暂停背景轮播');
+  }
+  buttons.forEach(button=>button.onclick=()=>{show(Number(button.dataset.slide));setTimer()});
+  pause.onclick=()=>{paused=!paused;request++;setTimer()};
+  setTimer();
+}
 
 const projects = suppliedProjects;
 const featuredProjects = ['xianyuanzhi','zhongguozhimai','xunmai','kanjianzhongguo','caomuyan','sanfu','dongtinglihei'].map(id=>projects.find(p=>p.id===id));
@@ -75,7 +105,7 @@ function projectColumns(columns) {
 function featuredCard(p) {
   const cover=p.cardCover || p.gallery[0];
   return `<div class="project-reveal reveal-item" data-project="${p.id}"><a class="project-card original-work featured-card" href="#/project/${p.id}" aria-label="查看${escapeHtml(p.title)}">
-    <div class="image-wrap"><img src="${cover.src}" alt="${escapeHtml(cover.alt)}" loading="lazy" decoding="async" width="${cover.width}" height="${cover.height}"></div>
+    <div class="image-wrap artwork-protected">${artworkImage(cover.src,cover.alt,cardImageSizes)}</div>
     <span class="card-arrow" aria-hidden="true">↗</span>
     <div class="card-meta"><div class="featured-title"><h3>${escapeHtml(p.title)}</h3><p class="caption-en" lang="en">${escapeHtml(p.english)}</p></div>
       <div class="featured-info"><p class="caption-category">${p.label} — ${p.year}</p><p class="caption-en" lang="en">${p.labelEnglish} — ${p.year}</p><p class="caption-client">${escapeHtml(p.featuredClient)}</p><p class="caption-en" lang="en">${escapeHtml(p.featuredClientEnglish)}</p></div>
@@ -87,9 +117,9 @@ function portfolio(category='all') {
   return `<section class="inner-page portfolio-page"><div class="page-heading"><div><p class="eyebrow">02 / PORTFOLIO</p><h1 class="page-title">作品，是我的表达。<br><span>Selected works.</span></h1></div><p class="aside">从视觉策略到落地呈现，<br>在不同媒介中探索设计的可能。</p></div><nav class="filters" aria-label="作品类别">${categories.map(([id,label])=>`<a href="#/work${id==='all'?'':'/'+id}" class="${category===id?'selected':''}" ${category===id?'aria-current="page"':''}>${label}<small>${String(id==='all'?projects.length:projects.filter(p=>p.category===id).length).padStart(2,'0')}</small></a>`).join('')}</nav><div class="works-grid portfolio-grid ${category==='all'?'fixed-columns':''}" aria-label="${categories.find(c=>c[0]===category)[1]}">${category==='all'?projectColumns(portfolioColumns):filtered.map(card).join('')}</div>${filtered.length?'<p class="project-preview-note">更多作品期待您的品鉴......</p>':'<div class="works-empty"><p class="empty-title">此类别作品整理中</p><p class="empty-title-en" lang="en">Works in this category are being curated.</p><span class="empty-note">新的设计项目即将呈现</span><span class="empty-note-en" lang="en">New design projects are coming soon.</span></div>'}</section>`;
 }
 function about() {
-  const portrait=profile.portrait?`<img class="portrait" src="${profile.portrait}" alt="林俊杰个人照片">`:'<div class="portrait-placeholder"><span>个人照片</span><small>PORTRAIT / 待补充</small></div>';
+  const portrait=profile.portrait?artworkImage(profile.portrait,'林俊杰个人照片','(max-width: 700px) 270px, 310px',true,'portrait'):'<div class="portrait-placeholder"><span>个人照片</span><small>PORTRAIT / 待补充</small></div>';
   return `<section class="inner-page about-page"><div class="page-heading"><div><p class="eyebrow">01 / ABOUT ME</p><h1 class="page-title">保持好奇。<br><span>让想法生长。</span></h1></div><p class="aside">视觉传达设计专业硕士<br>主视觉 / 空间视觉 / 品牌设计</p></div>
-    <div class="about-lead"><div class="about-identity"><div class="portrait-wrap reveal-item" data-repeat>${portrait}</div><div class="about-name reveal-item" data-repeat><span class="about-wordmark">SanMu</span><small>林俊杰</small><span class="mono">THOUGHTFUL BY DESIGN.</span></div></div><div class="about-copy"><h2>在秩序中寻找变化，<br>在日常中发现灵感。</h2><p class="about-cn">${profile.about}</p><p class="about-en" lang="en">${profile.aboutEn}</p></div></div>
+    <div class="about-lead"><div class="about-identity"><div class="portrait-wrap artwork-protected reveal-item" data-repeat>${portrait}</div><div class="about-name reveal-item" data-repeat><span class="about-wordmark">SanMu</span><small>林俊杰</small><span class="mono">THOUGHTFUL BY DESIGN.</span></div></div><div class="about-copy"><h2>在秩序中寻找变化，<br>在日常中发现灵感。</h2><p class="about-cn">${profile.about}</p><p class="about-en" lang="en">${profile.aboutEn}</p></div></div>
     <section class="capability-section"><div class="capability-content"><h2>综合设计素质<small>COMPREHENSIVE DESIGN EXPERTISE</small></h2><h3>设计能力 <span>DESIGN CAPABILITIES</span></h3><div class="capability-matrix">${capabilities.map(([cn,en])=>`<div><span>${cn}</span><small lang="en">${en}</small></div>`).join('')}</div><h3>设计软件 <span>DESIGN SOFTWARE</span></h3><div class="software-matrix">${software.map((name,i)=>`<div><span class="mono">${String(i+1).padStart(2,'0')}</span>${name}</div>`).join('')}</div></div></section>
     <section class="resume-section"><h2>教育经历<small>EDUCATION</small></h2><div><article class="resume-item"><time>2021–2025</time><div><h3>杭州师范大学 / 本科</h3><p>视觉传达设计</p></div></article><article class="resume-item"><time>2025–2028</time><div><h3>杭州师范大学 / 硕士</h3><p>视觉传达设计专硕</p></div></article></div></section>
     <section class="resume-section"><h2>实习路径<small>EXPERIENCE</small></h2><div>${experience.map(([date,company,role,description])=>`<article class="resume-item"><time>${date}</time><div><h3>${company}</h3><p class="role-title">${role}</p><p>${description}</p></div></article>`).join('')}</div></section>
@@ -109,7 +139,7 @@ function projectGallery(p) {
     else{flush();rows.push({portrait:false,images:[img]})}
   });
   flush();
-  return `<div class="project-gallery">${rows.map(row=>`<div class="gallery-row ${row.portrait?(portraitCount===1?'single-portrait-row':'portrait-row'):'landscape-row'}">${row.images.map(img=>`<a class="gallery-image" data-number="${img.number}" href="${img.src}" target="_blank" rel="noopener" aria-label="查看${escapeHtml(p.title)}第${img.number}张原图"><img src="${img.src}" alt="${escapeHtml(img.alt)}" width="${img.width}" height="${img.height}" loading="${img.number<=2?'eager':'lazy'}" decoding="async"></a>`).join('')}</div>`).join('')}</div>`;
+  return `<div class="project-gallery">${rows.map(row=>`<div class="gallery-row ${row.portrait?(portraitCount===1?'single-portrait-row':'portrait-row'):'landscape-row'}">${row.images.map(img=>`<div class="gallery-image artwork-protected" data-number="${img.number}">${artworkImage(img.src,img.alt,row.portrait&&portraitCount!==1?'46vw':'92vw')}</div>`).join('')}</div>`).join('')}</div>`;
 }
 function detail(id) {
   const p=projects.find(item=>item.id===id);
@@ -150,6 +180,7 @@ let awardResizeFrame;
 window.addEventListener('resize',()=>{cancelAnimationFrame(awardResizeFrame);awardResizeFrame=requestAnimationFrame(fitProjectAwards)});
 
 function clearPageEffects() {
+  disposeSlideshow();
   clearInterval(slideTimer);
   observers.forEach(observer=>observer.disconnect());
   observers=[];
@@ -226,6 +257,8 @@ function route() {
     if(match)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
   });
   main.innerHTML=page==='work'?portfolio(parts[1]):page==='about'?about():page==='contact'?contact():page==='project'?detail(parts[1]):home();
+  const imageObserver=loadArtworkNearViewport();
+  if(imageObserver) observers.push(imageObserver);
   fitProjectAwards();
   if(page==='home')startSlideshow();
   document.title=({home:'首页',about:'关于我',work:'作品集',contact:'联系',project:projects.find(p=>p.id===parts[1])?.title}[page]||'首页')+' — SanMu 林俊杰';
