@@ -272,5 +272,5 @@ function route() {
   if(selected)requestAnimationFrame(()=>document.querySelector('#selected').scrollIntoView({behavior:'instant'}));
 }
 window.addEventListener('hashchange',route);
-reducedMotion.addEventListener('change',()=>{clearPageEffects();setupMotion();if(main.dataset.page==='home')startSlideshow()});
+reducedMotion.addEventListener('change',()=>{clearPageEffects();const imageObserver=loadArtworkNearViewport();if(imageObserver)observers.push(imageObserver);setupMotion();if(main.dataset.page==='home')startSlideshow()});
 route();
